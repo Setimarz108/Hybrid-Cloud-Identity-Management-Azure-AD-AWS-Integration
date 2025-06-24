@@ -1,0 +1,5 @@
+aws_region = "eu-central-1"
+environment = "demo"
+azure_tenant_id = "ecf3b07d-1f21-4448-a688-aa0de346eb0b"
+azure_domain = "sebastianmarquezdevgmail.onmicrosoft.com"
+azure_ad_metadata = ""

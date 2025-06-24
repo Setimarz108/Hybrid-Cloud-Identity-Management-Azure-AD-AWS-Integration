@@ -1,0 +1,233 @@
+# terraform/aws/main.tf (Phase 1 - without SAML)
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+  }
+}
+
+# Configure the AWS Provider
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project     = "HybridIdentity"
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+      Owner       = "CloudEngineer"
+    }
+  }
+}
+
+# Data sources
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+# Local variables
+locals {
+  project_name = "hybrid-identity"
+  account_id   = data.aws_caller_identity.current.account_id
+}
+
+# Random string for unique bucket naming
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# S3 Bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail_logs" {
+  bucket        = "${local.project_name}-cloudtrail-logs-${random_string.bucket_suffix.result}"
+  force_destroy = true
+  
+  tags = {
+    Name = "CloudTrail Logs Bucket"
+  }
+}
+
+# S3 Bucket versioning
+resource "aws_s3_bucket_versioning" "cloudtrail_logs_versioning" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 Bucket server-side encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_logs_encryption" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# S3 Bucket policy for CloudTrail
+resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail_logs.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${local.account_id}:trail/${local.project_name}-audit-trail"
+          }
+        }
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${local.account_id}:trail/${local.project_name}-audit-trail"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# CloudTrail for auditing
+resource "aws_cloudtrail" "main" {
+  name           = "${local.project_name}-audit-trail"
+  s3_bucket_name = aws_s3_bucket.cloudtrail_logs.id
+  
+  event_selector {
+    read_write_type                 = "All"
+    include_management_events       = true
+  }
+  
+  tags = {
+    Name = "Hybrid Identity Audit Trail"
+  }
+  
+  depends_on = [aws_s3_bucket_policy.cloudtrail_logs_policy]
+}
+
+# Create IAM roles that will be used later for SAML
+# These roles will be updated in Phase 2 with SAML trust policies
+
+# Placeholder policy document for roles (will be updated with SAML)
+data "aws_iam_policy_document" "placeholder_assume_role" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${local.account_id}:root"]
+    }
+    actions = ["sts:AssumeRole"]
+    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+  }
+}
+
+# IAM Role for Finance Administrators
+resource "aws_iam_role" "finance_admin_role" {
+  name               = "AzureAD-FinanceAdmin"
+  assume_role_policy = data.aws_iam_policy_document.placeholder_assume_role.json
+  
+  tags = {
+    Name         = "Finance Administrator Role"
+    AzureADGroup = "Finance Administrators"
+    Status       = "PlaceholderForSAML"
+  }
+}
+
+# IAM Role for Developers
+resource "aws_iam_role" "developer_role" {
+  name               = "AzureAD-Developer"
+  assume_role_policy = data.aws_iam_policy_document.placeholder_assume_role.json
+  
+  tags = {
+    Name         = "Developer Role"
+    AzureADGroup = "Developer Team"
+    Status       = "PlaceholderForSAML"
+  }
+}
+
+# IAM Role for AWS Users
+resource "aws_iam_role" "aws_user_role" {
+  name               = "AzureAD-AWSUser"
+  assume_role_policy = data.aws_iam_policy_document.placeholder_assume_role.json
+  
+  tags = {
+    Name         = "AWS User Role"
+    AzureADGroup = "AWS Users"
+    Status       = "PlaceholderForSAML"
+  }
+}
+
+# IAM Role for Security Auditors
+resource "aws_iam_role" "security_auditor_role" {
+  name               = "AzureAD-SecurityAuditor"
+  assume_role_policy = data.aws_iam_policy_document.placeholder_assume_role.json
+  
+  tags = {
+    Name         = "Security Auditor Role"
+    AzureADGroup = "Security Auditors"
+    Status       = "PlaceholderForSAML"
+  }
+}
+
+# Policy attachments for Finance Admin Role
+resource "aws_iam_role_policy_attachment" "finance_admin_admin_access" {
+  role       = aws_iam_role.finance_admin_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
+# Policy attachments for Developer Role
+resource "aws_iam_role_policy_attachment" "developer_ec2_access" {
+  role       = aws_iam_role.developer_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "developer_s3_access" {
+  role       = aws_iam_role.developer_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+# Policy attachments for AWS User Role
+resource "aws_iam_role_policy_attachment" "aws_user_readonly" {
+  role       = aws_iam_role.aws_user_role.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# Policy attachments for Security Auditor Role
+resource "aws_iam_role_policy_attachment" "security_auditor_security_audit" {
+  role       = aws_iam_role.security_auditor_role.name
+  policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
+}
+
+resource "aws_iam_role_policy_attachment" "security_auditor_config" {
+  role       = aws_iam_role.security_auditor_role.name
+  policy_arn = "arn:aws:iam::aws:policy/ConfigUserAccess"
+}
