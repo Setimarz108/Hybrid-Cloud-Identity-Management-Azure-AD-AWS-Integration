@@ -1,4 +1,70 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.auto.tfvars
+crash.log
+crash.*.log
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
-# SAML Metadata files (contain sensitive data)
+# Azure
+*.pfx
+*.cer
 *-metadata.xml
 metadata.xml
+azure-ad-metadata.xml
+
+# AWS
+*.pem
+aws-credentials
+.aws/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sensitive
+secrets/
+credentials/
+*.key
+*.secret
+*.password
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+.tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
