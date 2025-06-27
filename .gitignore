@@ -1,0 +1,4 @@
+
+# SAML Metadata files (contain sensitive data)
+*-metadata.xml
+metadata.xml
